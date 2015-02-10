@@ -6,8 +6,10 @@ public class PlayerController : MonoBehaviour {
 	public float maxLimit;
 	public int timeLimit;
 	private static float forceOffTheGround = 0.89f;
-	private static int MAXTURN = 8;
-	private static int MAXROUND = 3;
+	private static int MAXTURN = 2;
+	private static int MAXROUND = 1;
+	// This varible is related to table position.
+	private static float MINZFORSCORE = 8.5f;
 
 	public GameObject prefabPlayer1;
 	public GameObject prefabPlayer2;
@@ -43,7 +45,7 @@ public class PlayerController : MonoBehaviour {
 		isDragFinish = false;
 		isOutOfLimits = false;
 		currentTime = 0;
-		turn = 1;
+		turn = 3;
 		round = 1;
 		isPlayer1turn = true;
 		isPlayer2turn = false;
@@ -52,6 +54,7 @@ public class PlayerController : MonoBehaviour {
 
 	// Update is called once per frame
 	void Update () {
+
 		// For each rounds
 		if (round <= MAXROUND) {
 			if (turn <= MAXTURN) {
@@ -72,11 +75,10 @@ public class PlayerController : MonoBehaviour {
 			}
 			// After all the turns
 			else if (turn == MAXTURN+1) {
-				Debug.Log ("11");
 				// Scores
 				scores();
 				//TODO Check? Remove all players objects
-				DestryAllPlayers();
+				//DestryAllPlayers();
 
 				// TODO Check? End of each turn
 				round += 1;
@@ -100,30 +102,49 @@ public class PlayerController : MonoBehaviour {
 	void scores(){
 		GameObject[] players1 = GameObject.FindGameObjectsWithTag ("player1");
 		GameObject[] players2 = GameObject.FindGameObjectsWithTag ("player2");
-		if (players1.Length == 0 || players2.Length == 0) return;
 
-		bool isPlayer1Bigger = false;
-		bool isPlayer2Bigger = false;
+		if (players1.Length == 0 && players2.Length == 0) return;
+		// TODO if (players1.Length == 0)
 
 		// checking for Z Axis of Objects (should be higher than others)
-		float maxP1Z = players1[0].transform.position.z;
-		foreach (GameObject p1 in players1) {
-			if (p1.transform.position.z > maxP1Z)
-				maxP1Z = p1.transform.position.z;
+		bool isPlayer1Bigger = false;
+		bool isPlayer2Bigger = false;
+		float maxP1Z = MINZFORSCORE;
+		float maxP2Z = MINZFORSCORE;
+		// Check if its on score area
+		foreach (GameObject scoreObject in scoreObjects) {
+			Bounds scoreBound = scoreObject.collider.bounds;
+			foreach (GameObject p1 in players1) {
+				Bounds playerBound = p1.collider.bounds;
+				// if they intersects
+				if (playerBound.Intersects (scoreBound)) {
+					if (p1.transform.position.z > maxP1Z)
+						maxP1Z = p1.transform.position.z;
+				}
+			}
+			foreach (GameObject p2 in players2) {
+				Bounds playerBound = p2.collider.bounds;
+				// if they intersects
+				if (playerBound.Intersects(scoreBound)){
+					if (p2.transform.position.z > maxP2Z)
+					{maxP2Z = p2.transform.position.z;}
+				}
+			}
 		}
-		float maxP2Z = players2[0].transform.position.z;
-		foreach (GameObject p2 in players2) {
-			if (p2.transform.position.z > maxP2Z)
-				maxP2Z = p2.transform.position.z;
-		}
-		// TODO what if they are the same z
+		//If they are all have their first value, return.
+		if (maxP1Z == MINZFORSCORE && maxP2Z == MINZFORSCORE) return;
 		if (maxP1Z > maxP2Z) {
 			isPlayer1Bigger = true;
 			isPlayer2Bigger = false;
 		} 
-		else {
+		else if (maxP1Z < maxP2Z) {
 			isPlayer1Bigger = false;
 			isPlayer2Bigger = true;
+		} 
+		// TODO if they have the same z
+		else {
+			isPlayer1Bigger = true;
+			isPlayer2Bigger = false;
 		}
 
 		// If player 1 is farther than Player 2
@@ -133,30 +154,47 @@ public class PlayerController : MonoBehaviour {
 				if (p1.transform.position.z > maxP2Z) {
 					// checking the bounds
 					Bounds playerBound = p1.renderer.bounds;
+					bool halfscoreTrigger = false;
+					int temphalfScoreCalculates = -1;
 					foreach (GameObject scoreObject in scoreObjects){
 						Bounds scoreBound = scoreObject.collider.bounds;
 						// if they intersects
 						if (playerBound.Intersects(scoreBound)){
 							// If the disk touches or crosses any of the lines, it scores the value of the lower scoring area.
-							bool halfscoreTrigger = false;
-							foreach (GameObject halfscoreObject in halfscoreObjects){
-								Bounds halfscoreBound = halfscoreObject.collider.bounds;
-								if (playerBound.Intersects(halfscoreBound)){
-									halfscoreTrigger = true;
+							if (!halfscoreTrigger){
+								foreach (GameObject halfscoreObject in halfscoreObjects){
+									Bounds halfscoreBound = halfscoreObject.collider.bounds;
+									if (playerBound.Intersects(halfscoreBound)){
+										halfscoreTrigger = true;
+										break;
+									}
+								}
+							}
+							// Player is in half Score
+							if (halfscoreTrigger){
+								// 2 score Trigger is triggered : so check for the lowest one
+								if (temphalfScoreCalculates == -1){
+									temphalfScoreCalculates = getScore(scoreObject);
+								}
+								else {
+									int temp2 = getScore(scoreObject);
+									if (temp2 > temphalfScoreCalculates) {
+										scorePlayer1 += temphalfScoreCalculates;
+									}
+									else {
+										scorePlayer1 += temp2;
+									}
+
+									P1ScoreManager.score = scorePlayer1;
 									break;
 								}
 							}
-							if (halfscoreTrigger){
-								// Sum the player1's score minus 1
-								scorePlayer1 += (getScore(scoreObject) - 1);
-								P1ScoreManager.score = scorePlayer1;
-								//TODO break;
-							}
+							// Player is not in Half score
 							else {
 								// Sum the player1's score
-								scorePlayer2 += getScore(scoreObject);
-								P2ScoreManager.score = scorePlayer2;
-								//TODO break;
+								scorePlayer1 += getScore(scoreObject);
+								P1ScoreManager.score = scorePlayer1;
+								break;
 							}
 						}
 					}
@@ -169,28 +207,45 @@ public class PlayerController : MonoBehaviour {
 				if (p2.transform.position.z > maxP1Z) {
 					// checking the bounds
 					Bounds playerBound = p2.collider.bounds;
+					bool halfscoreTrigger = false;
+					int temphalfScoreCalculates = -1;
 					foreach (GameObject scoreObject in scoreObjects){
 						Bounds scoreBound = scoreObject.collider.bounds;
 						// if they intersects
 						if (playerBound.Intersects(scoreBound)){
 							// If the disk touches or crosses any of the lines, it scores the value of the lower scoring area.
-							bool halfscoreTrigger = false;
-							foreach (GameObject halfscoreObject in halfscoreObjects){
-								Bounds halfscoreBound = halfscoreObject.collider.bounds;
-								if (playerBound.Intersects(halfscoreBound)){
-									halfscoreTrigger = true;
-									break;
+							if (!halfscoreTrigger){
+								foreach (GameObject halfscoreObject in halfscoreObjects){
+									Bounds halfscoreBound = halfscoreObject.collider.bounds;
+									if (playerBound.Intersects(halfscoreBound)){
+										halfscoreTrigger = true;
+										break;
+									}
 								}
 							}
 							if (halfscoreTrigger){
-								// Sum the player1's score minus 1
-								scorePlayer1 += (getScore(scoreObject) - 1);
-								//TODO break;
+								// 2 score Trigger is triggered : so check for the lowest one
+								if (temphalfScoreCalculates == -1){
+									temphalfScoreCalculates = getScore(scoreObject);
+								}
+								else {
+									int temp2 = getScore(scoreObject);
+									if (temp2 > temphalfScoreCalculates) {
+										scorePlayer2 += temphalfScoreCalculates;
+									}
+									else {
+										scorePlayer2 += temp2;
+									}
+									P2ScoreManager.score = scorePlayer2;
+									break;
+								}
 							}
 							else {
+								Debug.Log ("not halfscoreTrigger");
 								// Sum the player1's score
-								scorePlayer1 += getScore(scoreObject);
-								//TODO break;
+								scorePlayer2 += getScore(scoreObject);
+								P2ScoreManager.score = scorePlayer2;
+								break;
 							}
 						}
 					}
@@ -198,9 +253,11 @@ public class PlayerController : MonoBehaviour {
 			}
 		}
 		// TODO Error Handling?
-		else { }
+		else { }	
+		Debug.Log (scorePlayer1);
+		Debug.Log (scorePlayer2);
 	}
-	
+
 	void shuffleboard() {
 		if (!isLaunched) {
 			// 1) Going to Drag
@@ -235,17 +292,17 @@ public class PlayerController : MonoBehaviour {
 			// If its out or it reaches time limits
 			if (isOutOfLimits || currentTime > timeLimit)
 				DoThisWhenStopped();
-			}
 		}
+	}
 
 	// Launch object
 	void Launch(){
-		float distance = Vector3.Distance (currentPoint, endPoint);
-		float force = distance * distance;
+		//float distance = Vector3.Distance (currentPoint, endPoint);
+		//float force = distance * distance;
 		float dx = endPoint.x - currentPoint.x;
 		float dz = endPoint.z - currentPoint.z;
 		Vector3 movement = new Vector3 (dx, 0, dz);
-		player.rigidbody.AddForce (movement * speed * force, ForceMode.Impulse);
+		player.rigidbody.AddForce (movement * speed, ForceMode.Impulse);
 	}
 
 	// Drag the object
@@ -294,7 +351,7 @@ public class PlayerController : MonoBehaviour {
 		}
 		return false;
 	}
-	/* TODO Do we need it?!
+	/* TODO Do I need it?!
 	void OnCollisionEnter(Collision collision) {
 		// if it hits Player2
 		if (collision.gameObject.tag == "player2") {

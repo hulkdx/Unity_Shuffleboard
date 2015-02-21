@@ -7,6 +7,7 @@ public class Rounds : MonoBehaviour {
 	Text text;
 
 	void Awake () {
+		round = 1;
 		text = GetComponent <Text> ();
 	}
 	

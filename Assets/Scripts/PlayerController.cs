@@ -5,11 +5,12 @@ public class PlayerController : MonoBehaviour {
 	public int speed;
 	public float maxLimit;
 	public int timeLimit;
-	private static float forceOffTheGround = 0.89f;
-	private static int MAXTURN = 2;
-	private static int MAXROUND = 1;
+	private const float forceOffTheGround = 0.89f;
+	// MAX TURN its sum of each players turn
+	private const int MAXTURN = 4;
+	private const int MAXROUND = 2;
 	// This varible is related to table position.
-	private static float MINZFORSCORE = 8.5f;
+	private const float MINZFORSCORE = 8.5f;
 
 	public GameObject prefabPlayer1;
 	public GameObject prefabPlayer2;
@@ -30,46 +31,28 @@ public class PlayerController : MonoBehaviour {
 	private bool isLaunched;
 	private bool isOutOfLimits;
 	private bool isInstant;
+	private bool isTouchedAfterDrag;
 
 	private Vector3 currentPoint;
 	private Vector3 endPoint;
 
+	public CameraController cameraController;
 	// Use this for initialization
 	void Start () {
 		// Start with Player 1
 		scoreObjects = GameObject.FindGameObjectsWithTag ("scores");
 		halfscoreObjects = GameObject.FindGameObjectsWithTag ("halfscore");
-		scorePlayer1 = 0;
-		scorePlayer2 = 0;
-		isLaunched = false;
-		isDragFinish = false;
-		isOutOfLimits = false;
-		currentTime = 0;
-		turn = 3;
+		turn = 1;
 		round = 1;
 		isPlayer1turn = true;
-		isPlayer2turn = false;
-		isInstant = false;
 	}
 
 	// Update is called once per frame
 	void Update () {
-
 		// For each rounds
 		if (round <= MAXROUND) {
 			if (turn <= MAXTURN) {
-				// If its not created, creat it.
-				if (!isInstant){
-					if (isPlayer1turn){
-						player = Instantiate(prefabPlayer1, transform.position, transform.rotation) as GameObject;
-						player.tag = "player1";
-					} 
-					else if (isPlayer2turn){
-						player = Instantiate(prefabPlayer2, transform.position, transform.rotation) as GameObject;
-						player.tag = "player2";
-					}
-					isInstant = true;
-				}
+				CreatePlayer();
 				// Shuffle board
 				shuffleboard ();
 			}
@@ -78,14 +61,41 @@ public class PlayerController : MonoBehaviour {
 				// Scores
 				scores();
 				//TODO Check? Remove all players objects
-				//DestryAllPlayers();
+				DestryAllPlayers();
 
-				// TODO Check? End of each turn
+				// End of turns, beginning of new round
 				round += 1;
 				Rounds.round = round;
-				turn = 0;
+				turn = 1;
 			}
 		}
+	}
+
+	void CreatePlayer()
+	{
+		// If player is not created, creat it.
+		if (!isInstant){
+			if (isPlayer1turn){
+				player = Instantiate(prefabPlayer1, transform.position, transform.rotation) as GameObject;
+				player.tag = "player1";
+			} 
+			else if (isPlayer2turn){
+				player = Instantiate(prefabPlayer2, transform.position, transform.rotation) as GameObject;
+				player.tag = "player2";
+			}
+			CameraController.player = player;
+			CameraController.isMoving = false;
+			cameraController.setInitCamera();
+			isInstant = true;
+		}
+	}
+
+	// Physical codes
+	void FixedUpdate()
+	{
+		// Launching of the ball
+		if (isTouchedAfterDrag)
+						Launch ();
 	}
 
 	void DestryAllPlayers(){
@@ -99,215 +109,74 @@ public class PlayerController : MonoBehaviour {
 		}
 	}
 
-	void scores(){
-		GameObject[] players1 = GameObject.FindGameObjectsWithTag ("player1");
-		GameObject[] players2 = GameObject.FindGameObjectsWithTag ("player2");
-
-		if (players1.Length == 0 && players2.Length == 0) return;
-		// TODO if (players1.Length == 0)
-
-		// checking for Z Axis of Objects (should be higher than others)
-		bool isPlayer1Bigger = false;
-		bool isPlayer2Bigger = false;
-		float maxP1Z = MINZFORSCORE;
-		float maxP2Z = MINZFORSCORE;
-		// Check if its on score area
-		foreach (GameObject scoreObject in scoreObjects) {
-			Bounds scoreBound = scoreObject.collider.bounds;
-			foreach (GameObject p1 in players1) {
-				Bounds playerBound = p1.collider.bounds;
-				// if they intersects
-				if (playerBound.Intersects (scoreBound)) {
-					if (p1.transform.position.z > maxP1Z)
-						maxP1Z = p1.transform.position.z;
-				}
-			}
-			foreach (GameObject p2 in players2) {
-				Bounds playerBound = p2.collider.bounds;
-				// if they intersects
-				if (playerBound.Intersects(scoreBound)){
-					if (p2.transform.position.z > maxP2Z)
-					{maxP2Z = p2.transform.position.z;}
-				}
-			}
-		}
-		//If they are all have their first value, return.
-		if (maxP1Z == MINZFORSCORE && maxP2Z == MINZFORSCORE) return;
-		if (maxP1Z > maxP2Z) {
-			isPlayer1Bigger = true;
-			isPlayer2Bigger = false;
-		} 
-		else if (maxP1Z < maxP2Z) {
-			isPlayer1Bigger = false;
-			isPlayer2Bigger = true;
-		} 
-		// TODO if they have the same z
-		else {
-			isPlayer1Bigger = true;
-			isPlayer2Bigger = false;
-		}
-
-		// If player 1 is farther than Player 2
-		if (isPlayer1Bigger) {
-			foreach (GameObject p1 in players1) {
-				// only those disk that is further is getting score
-				if (p1.transform.position.z > maxP2Z) {
-					// checking the bounds
-					Bounds playerBound = p1.renderer.bounds;
-					bool halfscoreTrigger = false;
-					int temphalfScoreCalculates = -1;
-					foreach (GameObject scoreObject in scoreObjects){
-						Bounds scoreBound = scoreObject.collider.bounds;
-						// if they intersects
-						if (playerBound.Intersects(scoreBound)){
-							// If the disk touches or crosses any of the lines, it scores the value of the lower scoring area.
-							if (!halfscoreTrigger){
-								foreach (GameObject halfscoreObject in halfscoreObjects){
-									Bounds halfscoreBound = halfscoreObject.collider.bounds;
-									if (playerBound.Intersects(halfscoreBound)){
-										halfscoreTrigger = true;
-										break;
-									}
-								}
-							}
-							// Player is in half Score
-							if (halfscoreTrigger){
-								// 2 score Trigger is triggered : so check for the lowest one
-								if (temphalfScoreCalculates == -1){
-									temphalfScoreCalculates = getScore(scoreObject);
-								}
-								else {
-									int temp2 = getScore(scoreObject);
-									if (temp2 > temphalfScoreCalculates) {
-										scorePlayer1 += temphalfScoreCalculates;
-									}
-									else {
-										scorePlayer1 += temp2;
-									}
-
-									P1ScoreManager.score = scorePlayer1;
-									break;
-								}
-							}
-							// Player is not in Half score
-							else {
-								// Sum the player1's score
-								scorePlayer1 += getScore(scoreObject);
-								P1ScoreManager.score = scorePlayer1;
-								break;
-							}
-						}
-					}
-				}
-			}
-		}
-		else if (isPlayer2Bigger) {
-			foreach (GameObject p2 in players2) {
-				// only those disk that is further is getting score
-				if (p2.transform.position.z > maxP1Z) {
-					// checking the bounds
-					Bounds playerBound = p2.collider.bounds;
-					bool halfscoreTrigger = false;
-					int temphalfScoreCalculates = -1;
-					foreach (GameObject scoreObject in scoreObjects){
-						Bounds scoreBound = scoreObject.collider.bounds;
-						// if they intersects
-						if (playerBound.Intersects(scoreBound)){
-							// If the disk touches or crosses any of the lines, it scores the value of the lower scoring area.
-							if (!halfscoreTrigger){
-								foreach (GameObject halfscoreObject in halfscoreObjects){
-									Bounds halfscoreBound = halfscoreObject.collider.bounds;
-									if (playerBound.Intersects(halfscoreBound)){
-										halfscoreTrigger = true;
-										break;
-									}
-								}
-							}
-							if (halfscoreTrigger){
-								// 2 score Trigger is triggered : so check for the lowest one
-								if (temphalfScoreCalculates == -1){
-									temphalfScoreCalculates = getScore(scoreObject);
-								}
-								else {
-									int temp2 = getScore(scoreObject);
-									if (temp2 > temphalfScoreCalculates) {
-										scorePlayer2 += temphalfScoreCalculates;
-									}
-									else {
-										scorePlayer2 += temp2;
-									}
-									P2ScoreManager.score = scorePlayer2;
-									break;
-								}
-							}
-							else {
-								Debug.Log ("not halfscoreTrigger");
-								// Sum the player1's score
-								scorePlayer2 += getScore(scoreObject);
-								P2ScoreManager.score = scorePlayer2;
-								break;
-							}
-						}
-					}
-				}
-			}
-		}
-		// TODO Error Handling?
-		else { }	
-		Debug.Log (scorePlayer1);
-		Debug.Log (scorePlayer2);
-	}
-
 	void shuffleboard() {
 		if (!isLaunched) {
 			// 1) Going to Drag
 			if (!isDragFinish){
 				// Draging object
 				StartCoroutine (drag());
-				if (Input.touchCount > 0 && Input.GetTouch (0).phase == TouchPhase.Ended) {
-					isDragFinish = true;
-				}
 			} 
-			// 2) Going to Launch
+			// 2) Going to Launch in FixedUpdate
 			else {
 				// TODO CheckCurrLocation()
 				// Launch the object When Dragging is finished 
 				if (Input.touchCount > 0 && Input.GetTouch (0).phase == TouchPhase.Ended) {
 					if (setEndPosition()){
-						Launch();
-						isLaunched = true;
+						isTouchedAfterDrag = true;
+						// Launch in FixedUpdate
 					}
+				}
+				if (player.rigidbody.velocity.magnitude > 0.1 && isTouchedAfterDrag) {
+					isLaunched = true;
+					isTouchedAfterDrag = false;
 				}
 			}
 		}
 		// 3) its Launched
 		else {
-			// If its not Moving
-			if (player.rigidbody.IsSleeping ()) {
-				// TODO remove all object which is not in the score
-				// Change player and other stuff
+			// If Object is stopped Moving
+			if (player.rigidbody.velocity.magnitude < 0.1){
 				DoThisWhenStopped();
+				Debug.Log ("Is Not moving");
 			}
+			// Check for Stopped in FixedUpdate
 			currentTime += Time.deltaTime;
 			// If its out or it reaches time limits
-			if (isOutOfLimits || currentTime > timeLimit)
+			if (isOutOfLimits || currentTime > timeLimit){
+				if (isOutOfLimits)
+					Debug.Log ("Out of limit");
+				if (currentTime > timeLimit){
+					Debug.Log ("time limit");
+					Debug.Log ("currTime :" + currentTime);
+					Debug.Log ("TimeLimit :" + timeLimit);
+				}
 				DoThisWhenStopped();
+			}
 		}
 	}
-
+	
 	// Launch object
 	void Launch(){
-		//float distance = Vector3.Distance (currentPoint, endPoint);
+		CameraController.isMoving = true;
+		float distance = Vector3.Distance (currentPoint, endPoint);
 		//float force = distance * distance;
 		float dx = endPoint.x - currentPoint.x;
 		float dz = endPoint.z - currentPoint.z;
-		Vector3 movement = new Vector3 (dx, 0, dz);
-		player.rigidbody.AddForce (movement * speed, ForceMode.Impulse);
+		float angle = Mathf.Atan2(dz,dx);
+		Vector3 movement = new Vector3 (Mathf.Cos(angle) * distance, 0, Mathf.Sin(angle) *distance);
+		player.rigidbody.AddForce(movement* speed, ForceMode.Impulse);
+
+		//Vector3 movement = new Vector3 (dx, 0, dz);
+		//player.rigidbody.AddForce (movement * speed, ForceMode.Impulse);
 	}
 
 	// Drag the object
 	IEnumerator drag(){
 		while(Input.touchCount > 0) {
+			if (Input.GetTouch (0).phase == TouchPhase.Ended) {
+				isDragFinish = true;
+				break;
+			}
 			RaycastHit hit;
 			Ray ray = Camera.main.ScreenPointToRay(Input.GetTouch(0).position);
 
@@ -395,5 +264,162 @@ public class PlayerController : MonoBehaviour {
 
 	public void TriggerEntered(){
 		isOutOfLimits = true;
+	}
+
+	void scores(){
+		GameObject[] players1 = GameObject.FindGameObjectsWithTag ("player1");
+		GameObject[] players2 = GameObject.FindGameObjectsWithTag ("player2");
+		
+		if (players1.Length == 0 && players2.Length == 0) return;
+		// TODO if (players1.Length == 0)
+		
+		// checking for Z Axis of Objects (should be higher than others)
+		bool isPlayer1Bigger = false;
+		bool isPlayer2Bigger = false;
+		float maxP1Z = MINZFORSCORE;
+		float maxP2Z = MINZFORSCORE;
+		// Check if its on score area
+		foreach (GameObject scoreObject in scoreObjects) {
+			Bounds scoreBound = scoreObject.collider.bounds;
+			foreach (GameObject p1 in players1) {
+				Bounds playerBound = p1.collider.bounds;
+				// if they intersects
+				if (playerBound.Intersects (scoreBound)) {
+					if (p1.transform.position.z > maxP1Z)
+						maxP1Z = p1.transform.position.z;
+				}
+			}
+			foreach (GameObject p2 in players2) {
+				Bounds playerBound = p2.collider.bounds;
+				// if they intersects
+				if (playerBound.Intersects(scoreBound)){
+					if (p2.transform.position.z > maxP2Z)
+					{maxP2Z = p2.transform.position.z;}
+				}
+			}
+		}
+		//If they are all have their first value, return.
+		if (maxP1Z == MINZFORSCORE && maxP2Z == MINZFORSCORE) return;
+		if (maxP1Z > maxP2Z) {
+			isPlayer1Bigger = true;
+			isPlayer2Bigger = false;
+		} 
+		else if (maxP1Z < maxP2Z) {
+			isPlayer1Bigger = false;
+			isPlayer2Bigger = true;
+		} 
+		// TODO if they have the same z
+		else {
+			isPlayer1Bigger = true;
+			isPlayer2Bigger = false;
+		}
+		
+		// If player 1 is farther than Player 2
+		if (isPlayer1Bigger) {
+			foreach (GameObject p1 in players1) {
+				// only those disk that is further is getting score
+				if (p1.transform.position.z > maxP2Z) {
+					// checking the bounds
+					Bounds playerBound = p1.renderer.bounds;
+					bool halfscoreTrigger = false;
+					int temphalfScoreCalculates = -1;
+					foreach (GameObject scoreObject in scoreObjects){
+						Bounds scoreBound = scoreObject.collider.bounds;
+						// if they intersects
+						if (playerBound.Intersects(scoreBound)){
+							// If the disk touches or crosses any of the lines, it scores the value of the lower scoring area.
+							if (!halfscoreTrigger){
+								foreach (GameObject halfscoreObject in halfscoreObjects){
+									Bounds halfscoreBound = halfscoreObject.collider.bounds;
+									if (playerBound.Intersects(halfscoreBound)){
+										halfscoreTrigger = true;
+										break;
+									}
+								}
+							}
+							// Player is in half Score
+							if (halfscoreTrigger){
+								// 2 score Trigger is triggered : so check for the lowest one
+								if (temphalfScoreCalculates == -1){
+									temphalfScoreCalculates = getScore(scoreObject);
+								}
+								else {
+									int temp2 = getScore(scoreObject);
+									if (temp2 > temphalfScoreCalculates) {
+										scorePlayer1 += temphalfScoreCalculates;
+									}
+									else {
+										scorePlayer1 += temp2;
+									}
+									P1ScoreManager.score = scorePlayer1;
+									break;
+								}
+							}
+							// Player is not in Half score
+							else {
+								// Sum the player1's score
+								scorePlayer1 += getScore(scoreObject);
+								P1ScoreManager.score = scorePlayer1;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+		else if (isPlayer2Bigger) {
+			foreach (GameObject p2 in players2) {
+				// only those disk that is further is getting score
+				if (p2.transform.position.z > maxP1Z) {
+					// checking the bounds
+					Bounds playerBound = p2.collider.bounds;
+					bool halfscoreTrigger = false;
+					int temphalfScoreCalculates = -1;
+					foreach (GameObject scoreObject in scoreObjects){
+						Bounds scoreBound = scoreObject.collider.bounds;
+						// if they intersects
+						if (playerBound.Intersects(scoreBound)){
+							// If the disk touches or crosses any of the lines, it scores the value of the lower scoring area.
+							if (!halfscoreTrigger){
+								foreach (GameObject halfscoreObject in halfscoreObjects){
+									Bounds halfscoreBound = halfscoreObject.collider.bounds;
+									if (playerBound.Intersects(halfscoreBound)){
+										halfscoreTrigger = true;
+										break;
+									}
+								}
+							}
+							if (halfscoreTrigger){
+								// 2 score Trigger is triggered : so check for the lowest one
+								if (temphalfScoreCalculates == -1){
+									temphalfScoreCalculates = getScore(scoreObject);
+								}
+								else {
+									int temp2 = getScore(scoreObject);
+									if (temp2 > temphalfScoreCalculates) {
+										scorePlayer2 += temphalfScoreCalculates;
+									}
+									else {
+										scorePlayer2 += temp2;
+									}
+									P2ScoreManager.score = scorePlayer2;
+									break;
+								}
+							}
+							else {
+								// Sum the player1's score
+								scorePlayer2 += getScore(scoreObject);
+								P2ScoreManager.score = scorePlayer2;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+		// TODO Error Handling?
+		else { }	
+		Debug.Log (scorePlayer1);
+		Debug.Log (scorePlayer2);
 	}
 }

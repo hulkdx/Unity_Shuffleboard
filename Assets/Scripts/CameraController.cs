@@ -20,7 +20,10 @@ public class CameraController : MonoBehaviour {
 	void LateUpdate () {
 		if (player == null) return;
 		if (isMoving == false) return;
-		transform.position = player.transform.position + offset;
+		float z = player.transform.position.z + offset.z;
+		if (z < -15.98) return;
+		Vector3 temp = new Vector3 (0, 9.34f, z);
+		transform.position = temp;
 	}
 
 	// Set it back to first position

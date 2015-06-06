@@ -46,6 +46,8 @@
 	</Reference>
   </ItemGroup>
   <ItemGroup>
+     <Compile Include="Assets\AutoScaleScreenUI.cs" />
+     <Compile Include="Assets\Main Menu\Scripts\Menu1.cs" />
      <Compile Include="Assets\Scripts\CameraController.cs" />
      <Compile Include="Assets\Scripts\PlayerController.cs" />
      <Compile Include="Assets\Scripts\Scores\P1ScoreManager.cs" />
